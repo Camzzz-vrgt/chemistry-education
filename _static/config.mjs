@@ -28,3 +28,11 @@ globalThis.gnStaticMode = true;
     throw new Error('Could not connect to either Wisp server.');
   };
 })();
+
+(() => {
+  const base = typeof document === 'undefined'
+    ? new URL('./', self.location.href)
+    : new URL('../', document.currentScript.src);
+  globalThis.gnStaticBase = base.href;
+  globalThis.gnStaticURL = value => new URL(value.replace(/^\/+/, ''), base).href;
+})();
