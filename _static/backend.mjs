@@ -44,6 +44,50 @@ function relativePath(url) {
   return '/' + url.pathname.slice(base.pathname.length);
 }
 
+export function routeStaticPosts(proxyPrefix, decode, route) {
+  self.addEventListener('fetch', event => {
+    const request = event.request;
+    if (request.method !== 'POST' || request.mode === 'navigate') return;
+    const url = new URL(request.url);
+    if (url.origin !== base.origin || url.pathname.startsWith(proxyPrefix)) return;
+
+    event.respondWith((async () => {
+      const client = event.clientId && await self.clients.get(event.clientId);
+      const source = client && new URL(client.url);
+      const framePath = source?.origin === base.origin && source.pathname.startsWith(proxyPrefix)
+        ? source.pathname.slice(proxyPrefix.length) : '';
+      const [controller, frame, destination] = framePath.split('/');
+      if (!destination || !/^[a-z0-9]+$/.test(controller) || !/^[a-z0-9]+$/.test(frame)) {
+        return new Response('Static files support GET and HEAD.', { status: 405, headers: { Allow: 'GET, HEAD' } });
+      }
+
+      try {
+        const target = new URL(decode(destination));
+        if (!['https:', 'http:'].includes(target.protocol)) throw new Error('Invalid proxy origin.');
+        target.pathname = relativePath(url) ?? url.pathname;
+        target.search = url.search;
+        target.hash = '';
+        const proxyURL = new URL(proxyPrefix + controller + '/' + frame + '/' + encodeURIComponent(target.href), base);
+        return await route({
+          clientId: event.clientId,
+          request: {
+            url: proxyURL.href,
+            method: request.method,
+            headers: request.headers,
+            body: request.body,
+            referrer: request.referrer,
+            destination: request.destination,
+            mode: request.mode,
+            cache: request.cache
+          }
+        }, proxyURL);
+      } catch {
+        return new Response('Could not send this POST through Wisp.', { status: 502 });
+      }
+    })());
+  });
+}
+
 function sourceURL(url, pathname, origin) {
   const target = new URL(origin);
   target.pathname = pathname;
