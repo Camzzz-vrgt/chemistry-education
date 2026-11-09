@@ -44,12 +44,86 @@ function relativePath(url) {
   return '/' + url.pathname.slice(base.pathname.length);
 }
 
-export function routeStaticPosts(proxyPrefix, decode, route) {
+export function routeStaticPosts(getProxyPrefix, decode, route) {
+  const staged = new Map();
+  const marker = '__gn_post';
+
+  function framePrefix(url, proxyPrefix) {
+    if (url?.origin !== base.origin || !url.pathname.startsWith(proxyPrefix)) return null;
+    const [controller, frame, destination] = url.pathname.slice(proxyPrefix.length).split('/');
+    if (!destination || !/^[a-z0-9]+$/.test(controller) || !/^[a-z0-9]+$/.test(frame)) return null;
+    return proxyPrefix + controller + '/' + frame + '/';
+  }
+
+  function stage(id, value) {
+    staged.set(id, value);
+    setTimeout(() => { if (staged.get(id) === value) staged.delete(id); }, 30000);
+  }
+
+  self.addEventListener('message', event => {
+    const upload = event.data?.gnStaticPost;
+    const port = event.ports[0];
+    if (!upload || !port) return;
+    let ready = false;
+    try {
+      const url = new URL(upload.url);
+      const prefix = framePrefix(new URL(event.source.url), getProxyPrefix());
+      if (prefix && url.origin === base.origin && url.pathname.startsWith(prefix) &&
+          /^[a-f0-9-]{36}$/.test(upload.id) && !staged.has(upload.id) && staged.size < 256 &&
+          (upload.body === null || upload.body instanceof Blob)) {
+        stage(upload.id, { clientId: event.source.id, url, body: upload.body, prefix });
+        ready = true;
+      }
+    } catch {
+      ready = false;
+    } finally {
+      port.postMessage(ready);
+    }
+  });
+
+  function postEvent(event, url, body) {
+    const request = event.request;
+    return {
+      clientId: event.clientId,
+      request: {
+        url: url.href, method: 'POST', headers: request.headers, body,
+        referrer: request.referrer, destination: request.destination, mode: request.mode, cache: request.cache
+      }
+    };
+  }
+
   self.addEventListener('fetch', event => {
     const request = event.request;
-    if (request.method !== 'POST' || request.mode === 'navigate') return;
     const url = new URL(request.url);
-    if (url.origin !== base.origin || url.pathname.startsWith(proxyPrefix)) return;
+    if (url.origin !== base.origin) return;
+    const proxyPrefix = getProxyPrefix();
+    const id = url.searchParams.get(marker);
+    if (request.method === 'GET' && request.mode !== 'navigate' && id && url.pathname.startsWith(proxyPrefix)) {
+      event.stopImmediatePropagation();
+      event.respondWith((async () => {
+        const upload = staged.get(id);
+        const carrier = upload && new URL(upload.url);
+        carrier?.searchParams.set(marker, id);
+        if (!upload || upload.clientId !== event.clientId || carrier.href !== url.href) {
+          return new Response('This upload has expired.', { status: 410, headers: { 'Cache-Control': 'no-store' } });
+        }
+        staged.delete(id);
+        const response = await route(postEvent(event, upload.url, upload.body?.stream() ?? null), upload.url);
+        const location = response.headers.get('location');
+        if (!location || ![307, 308].includes(response.status)) return response;
+        const target = new URL(location, upload.url);
+        if (target.origin !== base.origin || !target.pathname.startsWith(upload.prefix)) return response;
+        target.hash = '';
+        stage(id, { ...upload, url: target });
+        const redirect = new URL(target);
+        redirect.searchParams.set(marker, id);
+        const headers = new Headers(response.headers);
+        headers.set('Location', redirect.href);
+        return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+      })());
+      return;
+    }
+    if (request.method !== 'POST' || request.mode === 'navigate' || url.pathname.startsWith(proxyPrefix)) return;
 
     event.respondWith((async () => {
       const client = event.clientId && await self.clients.get(event.clientId);
@@ -68,19 +142,7 @@ export function routeStaticPosts(proxyPrefix, decode, route) {
         target.search = url.search;
         target.hash = '';
         const proxyURL = new URL(proxyPrefix + controller + '/' + frame + '/' + encodeURIComponent(target.href), base);
-        return await route({
-          clientId: event.clientId,
-          request: {
-            url: proxyURL.href,
-            method: request.method,
-            headers: request.headers,
-            body: request.body,
-            referrer: request.referrer,
-            destination: request.destination,
-            mode: request.mode,
-            cache: request.cache
-          }
-        }, proxyURL);
+        return await route(postEvent(event, proxyURL, request.body), proxyURL);
       } catch {
         return new Response('Could not send this POST through Wisp.', { status: 502 });
       }
