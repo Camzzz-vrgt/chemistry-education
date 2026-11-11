@@ -3,7 +3,11 @@ globalThis.gnStaticMode = true;
 (() => {
   const decode = value => Array.from(atob(value), (byte, index) =>
     String.fromCharCode(byte.charCodeAt(0) ^ ((73 + index * 17) & 255))).join('');
-  const endpoints = Object.freeze(["PikYRqKxzu6ijJRgYAhUJzRFFqM=","PikYRqKxzu64mp8qdklbJDwNHqPwgQ=="].map(decode));
+const endpoints = Object.freeze([
+  "PikYRqKxzu6ijJRgYAhUJzRFFqM=",
+  "PikYRqKxzu64mp8qdklbJDwNHqPwgQ==",
+  "PikYRqKxy/Gpjot8LFIFJTEQELWzzdO/lJZlZkpYM3YHH/+z2damjpYt"
+].map(decode));
   globalThis.gnWispEndpoints = endpoints;
   globalThis.gnWispEndpoint = endpoints[0];
 
