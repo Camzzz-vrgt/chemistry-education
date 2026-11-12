@@ -1,0 +1,4 @@
+.tmp/
+bootstrap/
+*.zip
+node_modules/
