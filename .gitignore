@@ -1,4 +1,4 @@
 .tmp/
-bootstrap/
+door/
 *.zip
 node_modules/

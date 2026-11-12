@@ -5,7 +5,7 @@
    worker out of a verified pack in Cache Storage. Deployed files stay
    under ~30 KB:
 
-     bootstrap/
+     door/                 (build output — deploy this)
        index.html            — loader page + silent installer
        study.html            — identical alternate entry
        static-worker.mjs     — META worker (evals inner.js from cache)
@@ -13,11 +13,11 @@
        assets/logo.png       — gn-math mark for the loader
        .nojekyll
 
-     payload/  (→ public repo → jsDelivr)
+     bootstrap/payload/  (→ in-repo → jsDelivr)
        assets/<hash>.pack    — GNPACK1 archive of the whole site
        boot-manifest.json
 
-   GN-Math is already a fully static site (repo root == deploy root), so
+   GN-Math is already a fully static site (education/ == deploy root), so
    there is no build step — SRC walks the checkout itself. The real
    service worker is an ES module; it's esbuild-bundled to inner.js
    (classic iife) at pack time so the meta worker can eval it.
@@ -47,9 +47,9 @@ import {
 import { join, relative, sep } from "node:path";
 import { createRequire } from "node:module";
 
-const ROOT = ".";
-const OUT = "bootstrap";
-const PAYLOAD_DIR = "payload";
+const ROOT = "education";
+const OUT = "door";
+const PAYLOAD_DIR = join("bootstrap", "payload");
 const ZIP = "gn-math-bootstrap.zip";
 
 /* Files that are repo/tooling only — never part of the deployed site. */
@@ -79,7 +79,7 @@ async function loadEsbuild() {
 }
 
 if (!existsSync(join(ROOT, "index.html")) || !existsSync(join(ROOT, "static-worker.mjs"))) {
-    console.error("run from the gn-math site root (needs index.html + static-worker.mjs)");
+    console.error("run from the repo root (needs education/index.html + education/static-worker.mjs)");
     process.exit(1);
 }
 
@@ -109,7 +109,7 @@ const esbuild = await loadEsbuild();
 let innerSource = null;
 if (esbuild) {
     const res = esbuild.buildSync({
-        entryPoints: ["static-worker.mjs"],
+        entryPoints: [join(ROOT, "static-worker.mjs")],
         bundle: true,
         format: "iife",
         platform: "neutral",
@@ -332,7 +332,7 @@ writeFileSync(join(OUT, "static-worker.mjs"), swOut);
 writeFileSync(join(OUT, "boot-manifest.json"), JSON.stringify(manifest));
 writeFileSync(join(PAYLOAD_DIR, "boot-manifest.json"), JSON.stringify(manifest));
 
-cpSync("gn-mathtitle.png", join(OUT, "assets", "logo.png"));
+cpSync(join(ROOT, "gn-mathtitle.png"), join(OUT, "assets", "logo.png"));
 
 writeFileSync(join(PAYLOAD_DIR, packName), pack);
 if (!PAYLOAD) cpSync(join(PAYLOAD_DIR, packName), join(OUT, packName)); // same-origin dev mode
@@ -377,7 +377,7 @@ try {
             "-c",
             "import zipfile,os\n" +
                 "z=zipfile.ZipFile('gn-math-bootstrap.zip','w',zipfile.ZIP_DEFLATED)\n" +
-                "[z.write(os.path.join(r,f),os.path.relpath(os.path.join(r,f),'bootstrap')) for r,_,fs in os.walk('bootstrap') for f in fs]\n" +
+                "[z.write(os.path.join(r,f),os.path.relpath(os.path.join(r,f),'door')) for r,_,fs in os.walk('door') for f in fs]\n" +
                 "z.close()",
         ],
         { stdio: "inherit" },
@@ -387,7 +387,7 @@ try {
     try {
         execFileSync(
             "powershell",
-            ["-NoProfile", "-Command", `Compress-Archive -Path 'bootstrap\\*' -DestinationPath '${ZIP}' -Force`],
+            ["-NoProfile", "-Command", `Compress-Archive -Path 'door\\*' -DestinationPath '${ZIP}' -Force`],
             { stdio: "inherit" },
         );
         zipped = true;
@@ -397,6 +397,6 @@ try {
 const kb = (n) => (n / 1024).toFixed(0);
 const mb = (n) => (n / 1024 / 1024).toFixed(1);
 console.log(`pack: ${entries.length} files, ${mb(rawPack.length)} MB raw -> ${mb(pack.length)} MB gz`);
-console.log(`bootstrap/ ready — ${files} files, ${kb(doorBytes)} KB total (deploy target)`);
+console.log(`door/ ready — ${files} files, ${kb(doorBytes)} KB total (deploy target)`);
 console.log(zipped ? "gn-math-bootstrap.zip written" : "zip skipped — upload the folder instead");
 console.log(manifest.u ? `pack fetch: ${manifest.u}` : "pack fetch: same-origin (assets/*.pack copied into door — set GN_PAYLOAD_URL for remote hosting)");

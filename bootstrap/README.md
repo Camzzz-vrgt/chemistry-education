@@ -1,51 +1,46 @@
-# GN-Math bootstrapper
+# bootstrap/
 
-Same technique as the toothpaste bootstrapper: a ~19 KB static "door"
-installs a meta service worker, which downloads a single gzipped pack of
-the real GN-Math site, verifies it, unpacks it into Cache Storage, and
-serves the app — including the whole Wisp/scramjet proxy stack — from the
-cache. The payload pack is hosted separately (jsDelivr/GitHub or any
-static host), so the door itself stays tiny.
+The GN-Math bootstrapper — same technique as the toothpaste bootstrapper.
+A ~20 KB static "door" installs a meta service worker, which downloads a
+single gzipped pack of the real site (`education/`), verifies it, unpacks
+it into Cache Storage, and serves the app — including the whole
+Wisp/scramjet proxy stack — from the cache. The payload pack is hosted
+from this repo via jsDelivr, so the door itself stays tiny.
 
-## Layout
+## Repo layout
 
 ```
-bootstrap/            deploy target — the door (~19 KB + optional pack)
-  index.html          installer/decoy cover (registers the SW, shows logo)
-  study.html          identical alternate entry
-  static-worker.mjs   the META worker — the only worker file served (7.5 KB)
-  boot-manifest.json  revision + pack hash + pack URL (136 B)
-  assets/logo.png
-  assets/*.pack       only in same-origin mode (6.9 MB — do not deploy
-                      on the door if you want it small)
-payload/              files to upload to the payload host
-  assets/<hash>.pack  gzipped GNPACK1 archive of the full site
-  boot-manifest.json
-tools/package-bootstrap.mjs   builder
-tools/meta-sw.js              meta worker source (edit this, then rebuild)
+education/              the GN-Math site source (deploy root — untouched)
+bootstrap/              this folder — the bootstrapper
+  tools/package-bootstrap.mjs   builder
+  tools/meta-sw.js              meta worker source (edit, then rebuild)
+  payload/                      hosted payload (jsDelivr serves it)
+    assets/<hash>.pack          gzipped GNPACK1 archive of the site
+    boot-manifest.json
+door/                   build output — the thing you deploy (gitignored)
+gn-math-bootstrap.zip   zipped door (gitignored)
 ```
 
 ## Build
 
-Run from the repo root (needs `index.html` + `static-worker.mjs` present —
-the repo root IS the site, no app build step):
+Run from the repo root:
 
 ```bash
-node tools/package-bootstrap.mjs
+node bootstrap/tools/package-bootstrap.mjs
 ```
 
-Outputs `bootstrap/`, `payload/`, and `gn-math-bootstrap.zip`.
+Outputs `door/`, `bootstrap/payload/`, and `gn-math-bootstrap.zip`.
 
-### Remote payload (recommended deploy shape)
+### Remote payload (the deploy shape)
 
 ```bash
-GN_PAYLOAD_URL=https://cdn.jsdelivr.net/gh/<org>/<repo>@<tag> \
-node tools/package-bootstrap.mjs
+GN_PAYLOAD_URL=https://cdn.jsdelivr.net/gh/Camzzz-vrgt/chemistry-education@main/bootstrap/payload \
+node bootstrap/tools/package-bootstrap.mjs
 ```
 
-Then upload `payload/` to that repo/tag and deploy `bootstrap/` minus
-`bootstrap/assets/*.pack` — total door ≈ 19 KB. The installer and the meta
-worker fetch `boot-manifest.json` + the pack from the payload host.
+Then push `bootstrap/payload/` and deploy `door/` — ≈20 KB of html/js/png.
+The installer and the meta worker fetch `boot-manifest.json` + the pack
+from jsDelivr.
 
 - `GN_PACK_URL` — override just the pack URL
 - `GN_MANIFEST_URL` — extra manifest feed checked before the local one
@@ -55,11 +50,11 @@ worker fetch `boot-manifest.json` + the pack from the payload host.
 
 ### Same-origin mode (local testing)
 
-No env vars: the pack is copied into `bootstrap/assets/` and fetched
-same-origin. Serve `bootstrap/` with any static server:
+No env vars: the pack is copied into `door/assets/` and fetched
+same-origin. Serve `door/` with any static server:
 
 ```bash
-cd bootstrap && python -m http.server 8778
+cd door && python -m http.server 8778
 ```
 
 ## How it works
@@ -101,7 +96,7 @@ Playwright-driven on `127.0.0.1:8778`, clean (non-debug) build:
 
 ## Updating GN-Math
 
-Pull the upstream repo, rebuild, re-upload `payload/`. The manifest
-revision is a content hash — new pack → new bundle → next SW activate
-swaps it. The door never changes unless `tools/meta-sw.js` or the
-installer does.
+Pull the upstream repo into `education/`, rebuild, push — jsDelivr picks
+up the new `bootstrap/payload/`. The manifest revision is a content hash:
+new pack → new bundle → next SW activate swaps it. The door never
+changes unless `tools/meta-sw.js` or the installer does.
