@@ -287,25 +287,77 @@ try {
     installerFinal = `<script>${esbuild.transformSync(installerScript, { minify: true, target: "es2020" }).code}</script>`;
 } catch { /* keep readable */ }
 
-const doorHtml = `<!doctype html>
+/* Door = the same Atlanta Classical Academy decoy cover toothpaste
+ * ships — an edu site with zero GN-Math branding. The two webp images
+ * hotlink the booksforschool payload host (<img> needs no CORS), and
+ * the installer pill stays pinned to the bottom of the page. */
+const doorHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GN-Math</title>
-<link rel="icon" href="assets/logo.png">
-<style>
-html,body{height:100%;margin:0}
-body{background:#0d1020;display:grid;place-items:center;
- background-image:radial-gradient(ellipse at 50% 30%,rgba(247,37,90,.08),transparent 60%),
- linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),
- linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
- background-size:auto,36px 36px,36px 36px}
-img{width:min(46vw,300px);image-rendering:pixelated;filter:drop-shadow(0 6px 24px rgba(247,37,90,.35))}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Atlanta Classical Academy is a tuition-free, K-12 public charter school in Atlanta, Georgia, forming knowledgeable, virtuous American citizens." />
+  <meta name="keywords" content="Atlanta Classical Academy, classical education, K-12, public charter school, Atlanta, Georgia" />
+  <meta name="author" content="Atlanta Classical Academy" />
+  <meta name="application-name" content="Atlanta Classical Academy" />
+  <meta name="apple-mobile-web-app-title" content="Atlanta Classical Academy" />
+  <meta name="theme-color" content="#f7f3ea" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Atlanta Classical Academy" />
+  <meta property="og:title" content="Atlanta Classical Academy" />
+  <meta property="og:description" content="Forming knowledgeable, virtuous American citizens through a classical, content-rich K-12 education in Atlanta." />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "EducationalOrganization",
+    "name": "Atlanta Classical Academy",
+    "url": "https://www.atlantaclassical.org/",
+    "description": "Atlanta Classical Academy is a tuition-free, K-12 public charter school open to students who reside within the Atlanta Public Schools district.",
+    "telephone": "+1-404-369-3500",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "3260 Northside Drive NW",
+      "addressLocality": "Atlanta",
+      "addressRegion": "GA",
+      "postalCode": "30305",
+      "addressCountry": "US"
+    }
+  }
+  </script>
+  <title>Atlanta Classical Academy</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='4' fill='%23f7f3ea'/%3E%3Cpath d='M12 5L2 9.5l10 4.5 8-3.6V15h2V9.5L12 5z' fill='%232f4f7f'/%3E%3Cpath d='M6 12.5V16c0 1.7 2.7 3 6 3s6-1.3 6-3v-3.5l-6 2.7-6-2.7z' fill='%232f4f7f'/%3E%3C/svg%3E" />
+  <style id="fcss">
+    #front{position:fixed;inset:0;z-index:150;overflow-y:auto}
+    #front[hidden]{display:none}
+#front{font-family:Arial,Helvetica,sans-serif;color:#13294b;background:#fff;color-scheme:light}
+#front *{box-sizing:border-box}
+#front{margin:0}
+#front header{color:#fff;background:#13294b}
+#front .utility{display:flex;justify-content:flex-end;gap:28px;padding:14px 4%;background:#0b1d37;font-size:12px}
+#front .navigation{display:flex;align-items:center;justify-content:space-between;gap:32px;padding:28px 4%}
+#front .logo{display:block;width:min(30vw,360px);height:auto}
+#front nav{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:22px;font-size:14px;font-weight:700}
+#front .hero{position:relative;display:grid;align-items:end;min-height:620px;height:calc(100svh - 185px);max-height:900px;color:#fff;background:#13294b;isolation:isolate}
+#front .hero-image{position:absolute;z-index:-2;width:100%;height:100%;object-fit:cover;object-position:center 35%}
+#front .hero:after{content:"";position:absolute;z-index:-1;inset:0;background:linear-gradient(transparent 20%,#08172ce5)}
+#front .caption{max-width:1060px;padding:64px 7vw}
+#front h1{margin:0 0 24px;font-family:Georgia,Times New Roman,serif;font-size:clamp(32px,3.5vw,56px);line-height:1.12;font-weight:400}
+#front p{margin:0;font-size:17px;line-height:1.7}
+#front .learn{display:inline-flex;gap:28px;margin-top:26px;padding:14px 24px;border:1px solid #fff;font-size:14px}
+#front .intro{max-width:1000px;margin:0 auto;padding:60px 24px;text-align:center}
+@media(max-width:760px){
+#front h2{font:36px Georgia,Times New Roman,serif}
+#front .utility{justify-content:center;gap:16px}
+#front .navigation{flex-direction:column;gap:20px;padding:20px}
+#front .logo{width:270px}
+#front nav{justify-content:center;gap:12px 18px;font-size:12px}
+#front .hero{min-height:550px;height:auto}
+#front .caption{padding:40px 24px}
+}
+  </style>
 </head>
 <body>
-<img src="assets/logo.png" alt="">
+  <div id="front" data-mask-skip><header><div class="utility"><span>Board</span><span>Calendar</span><span>Employment</span><span>Support ACA</span></div><div class="navigation"><img class="logo" src="https://cdn.jsdelivr.net/gh/Camzzz-vrgt/booksforschool@main/boot-logo.webp" width="360" height="102" alt="Atlanta Classical Academy"><nav aria-label="Main"><span>About</span><span>Enrollment</span><span>Academics</span><span>Athletics</span><span>Fine Arts</span><span>Community</span><span>Parent Resources</span></nav></div></header><main><section class="hero" aria-labelledby="mission"><img class="hero-image" src="https://cdn.jsdelivr.net/gh/Camzzz-vrgt/booksforschool@main/boot-cover.webp" width="1200" height="800" alt="Atlanta Classical Academy students on campus"><div class="caption"><h1 id="mission">Forming Knowledgeable, Virtuous American Citizens</h1><p> The mission of Atlanta Classical Academy is to develop students in mind and character through a classical, content-rich curriculum that emphasizes the principles of virtuous living, traditional learning, and civic responsibility. </p><span class="learn">Learn More <span aria-hidden="true">→</span></span></div></section><section class="intro"><h2>Welcome to Atlanta Classical Academy</h2><p> A tuition-free, K-12 public charter school open to students who reside within the Atlanta Public Schools district. </p></section></main></div>
 ${installerFinal}
 </body>
 </html>
@@ -331,8 +383,6 @@ try {
 writeFileSync(join(OUT, "static-worker.mjs"), swOut);
 writeFileSync(join(OUT, "boot-manifest.json"), JSON.stringify(manifest));
 writeFileSync(join(PAYLOAD_DIR, "boot-manifest.json"), JSON.stringify(manifest));
-
-cpSync(join(ROOT, "gn-mathtitle.png"), join(OUT, "assets", "logo.png"));
 
 writeFileSync(join(PAYLOAD_DIR, packName), pack);
 if (!PAYLOAD) cpSync(join(PAYLOAD_DIR, packName), join(OUT, packName)); // same-origin dev mode
