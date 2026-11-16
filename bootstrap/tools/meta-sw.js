@@ -216,7 +216,17 @@ async function packFetch(request) {
     if (!url.href.startsWith(scopeURL)) return null;
     const cache = await caches.open(name);
     const hit = await bundleMatch(cache, url.pathname);
-    return hit ? frameHeaders(hit) : null;
+    if (hit) return frameHeaders(hit);
+    /* Door-alias fallback: alternate entry pages (study.html, or any
+     * renamed copy someone links) aren't in the pack. For navigations
+     * serve the app entry under the requested URL — reloading the alias
+     * then lands on the app in place, with no redirect to flagged paths
+     * like /index.html. */
+    if (request.mode === "navigate") {
+        const app = await bundleMatch(cache, SCOPE_PATH + "index.html");
+        if (app) return frameHeaders(app);
+    }
+    return null;
 }
 
 /* ---------------- update check ---------------- */

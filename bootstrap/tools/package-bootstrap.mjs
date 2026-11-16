@@ -369,11 +369,10 @@ const installerScript = `
             updateViaCache: "none"
         });
         await navigator.serviceWorker.ready;
-        /* Hand off to the app entry — never reload THIS page: alternate door
-         * paths (study.html) aren't in the pack, so a same-URL reload just
-         * re-runs this installer forever (ready resolves instantly once the
-         * worker is active → ~30 nav/sec reload loop). */
-        location.replace(new URL("index.html", base).href);
+        /* Reload in place — never navigate to index.html: that path is a
+         * blocked main_frame pattern on S3 hosts, and the worker aliases
+         * this door path to the app entry anyway, so the URL stays clean. */
+        location.reload();
     })().catch(function () {
         setStatus("couldn't finish \\u2014 refresh to retry");
         statusEl.style.color = "#ff9d9d";

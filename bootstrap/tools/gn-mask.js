@@ -144,7 +144,7 @@
     var fontURL = new URL(FONT_PATH, document.currentScript.src).href;
     var fontURLMC = FONT_PATH_MC ? new URL(FONT_PATH_MC, document.currentScript.src).href : null;
     var pickFace = function (ff) {
-        return fontURLMC && ff.indexOf("Minecraftia") !== -1 ? '"GlyphsM",' : '"Glyphs",';
+        return fontURLMC && ff.toLowerCase().indexOf("minecraftia") !== -1 ? '"GlyphsM",' : '"Glyphs",';
     };
     function installFont(root) {
         var style = document.createElement("style");
