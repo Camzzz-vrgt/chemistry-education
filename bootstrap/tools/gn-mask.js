@@ -25,6 +25,7 @@
 
     var ALIASES = __ALIASES__;
     var FONT_PATH = "__FONT_PATH__";
+    var FONT_PATH_MC = "__FONT_PATH_MC__";
 
     function unpackTerms(value) {
         var bytes = Uint8Array.from(atob(value), function (c) { return c.charCodeAt(0); });
@@ -139,13 +140,18 @@
         return out;
     }
 
-    /* ---- font: PUA-only Glyphs face first in every stack ---- */
+    /* ---- font: PUA-only Glyphs faces first in every stack ---- */
     var fontURL = new URL(FONT_PATH, document.currentScript.src).href;
+    var fontURLMC = FONT_PATH_MC ? new URL(FONT_PATH_MC, document.currentScript.src).href : null;
+    var pickFace = function (ff) {
+        return fontURLMC && ff.indexOf("Minecraftia") !== -1 ? '"GlyphsM",' : '"Glyphs",';
+    };
     function installFont(root) {
         var style = document.createElement("style");
         style.setAttribute("data-km-skip", "");
         style.textContent =
             '@font-face{font-family:"Glyphs";src:url("' + fontURL + '") format("truetype");font-display:block;unicode-range:U+F0000-FFFFD}' +
+            (fontURLMC ? '@font-face{font-family:"GlyphsM";src:url("' + fontURLMC + '") format("truetype");font-display:block;unicode-range:U+F0000-FFFFD}' : '') +
             'html{font-family:"Glyphs",Inter,system-ui,sans-serif}';
         (document.head || document.documentElement).appendChild(style);
         patchStacks();
@@ -153,7 +159,7 @@
     function patchRule(rule) {
         try {
             if (rule.style && rule.style.fontFamily && rule.style.fontFamily.indexOf("Glyphs") === -1) {
-                rule.style.fontFamily = '"Glyphs",' + rule.style.fontFamily;
+                rule.style.fontFamily = pickFace(rule.style.fontFamily) + rule.style.fontFamily;
             }
         } catch (e) {}
     }
@@ -206,7 +212,7 @@
             if (next !== cur) el.setAttribute(attr, next);
         }
         if (el.style && el.style.fontFamily && el.style.fontFamily.indexOf("Glyphs") === -1) {
-            el.style.fontFamily = '"Glyphs",' + el.style.fontFamily;
+            el.style.fontFamily = pickFace(el.style.fontFamily) + el.style.fontFamily;
         }
         if (el instanceof HTMLOptionElement && containsBlocked(el.text)) {
             var nt = veil(el.text);

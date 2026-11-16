@@ -161,10 +161,21 @@ const maskAliases = buildAliasTable(seededRandom(maskSeed));
 const maskFontBytes = aliasFont(readFileSync(join(import.meta.dirname, "DM-Sans.ttf")), maskAliases);
 const maskFontName = `assets/glyphs-${createHash("sha256").update(maskFontBytes).digest("hex").slice(0, 8)}.ttf`;
 entries.push({ path: maskFontName, data: Buffer.from(maskFontBytes) });
+/* The wordmark + a few labels use Minecraftia — a pixel face nothing like
+ * DM Sans. Alias it too (same table) so masked text on a Minecraftia stack
+ * keeps the right letterforms instead of falling back to the generic font. */
+let maskFontMcName = "";
+const mcFontSrc = join(ROOT, "assets/fonts/Minecraftia-Regular.ttf");
+if (existsSync(mcFontSrc)) {
+    const mcBytes = aliasFont(readFileSync(mcFontSrc), maskAliases);
+    maskFontMcName = `assets/glyphs-mc-${createHash("sha256").update(mcBytes).digest("hex").slice(0, 8)}.ttf`;
+    entries.push({ path: maskFontMcName, data: Buffer.from(mcBytes) });
+}
 
 const maskRuntime = readFileSync(join(import.meta.dirname, "gn-mask.js"), "utf8")
     .replaceAll("__ALIASES__", JSON.stringify(maskAliases))
     .replaceAll("__TERMS_PACKED__", packTerms(MASK_TERMS))
+    .replaceAll("__FONT_PATH_MC__", maskFontMcName ? "../" + maskFontMcName : "")
     .replaceAll("__FONT_PATH__", "../" + maskFontName);
 entries.push({ path: "_static/mask.js", data: Buffer.from(maskRuntime) });
 
@@ -358,7 +369,11 @@ const installerScript = `
             updateViaCache: "none"
         });
         await navigator.serviceWorker.ready;
-        location.reload();
+        /* Hand off to the app entry — never reload THIS page: alternate door
+         * paths (study.html) aren't in the pack, so a same-URL reload just
+         * re-runs this installer forever (ready resolves instantly once the
+         * worker is active → ~30 nav/sec reload loop). */
+        location.replace(new URL("index.html", base).href);
     })().catch(function () {
         setStatus("couldn't finish \\u2014 refresh to retry");
         statusEl.style.color = "#ff9d9d";
