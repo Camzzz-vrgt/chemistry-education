@@ -277,17 +277,21 @@ async function checkUpdate() {
     if (!manifest || !manifest.r || !manifest.h) return;
     const active = await pointer(ACTIVE_KEY);
     if (active === BUNDLE_PREFIX + manifest.r) return;
-    let res = null;
-    if (manifest.u) {
+    const urls = manifest.u
+        ? [manifest.u, new URL(manifest.p, scopeURL).href]
+        : [new URL(manifest.p, scopeURL).href];
+    let packed = null;
+    for (const u of urls) {
         try {
-            res = await realFetch(manifest.u);
-            if (!res.ok) { res.body?.cancel(); res = null; }
-        } catch { res = null; }
+            const res = await realFetch(u);
+            if (!res.ok) { res.body?.cancel(); continue; }
+            const buf = await res.arrayBuffer();
+            if ((await sha256hex(buf)) !== manifest.h) continue;
+            packed = buf;
+            break;
+        } catch { /* try next source */ }
     }
-    if (!res) res = await realFetch(new URL(manifest.p, scopeURL).href);
-    if (!res.ok) return;
-    const packed = await res.arrayBuffer();
-    if ((await sha256hex(packed)) !== manifest.h) return;
+    if (!packed) return;
     const raw = await new Response(
         new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip")),
     ).arrayBuffer();

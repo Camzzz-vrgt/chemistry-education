@@ -150,6 +150,22 @@ export function routeStaticPosts(getProxyPrefix, decode, route) {
   });
 }
 
+/* Upstream pages carry the recognizable words — catalog names, category
+ * labels, player chrome. Inject the keyword-mask runtime into every HTML
+ * body served through Wisp: the catalog ("games.html") masks every char so
+ * unbounded game names never reach the DOM verbatim; everything else gets
+ * the dictionary pass. Our aliases live in plane-15 PUA (U+F0000+) while
+ * upstream's own mask claims BMP PUA (U+E000-F8FF), so the two masks can
+ * coexist on one page without corrupting each other's text. */
+function injectMaskTag(html, pathname) {
+  const mode = pathname === '/games.html' ? 'all' : 'dict';
+  const tag = `<script>window.__kwMaskMode=${JSON.stringify(mode)}</script>` +
+    `<script src="${base.pathname}_static/mask.js"></script>`;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, tag + '</head>');
+  if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => m + tag);
+  return tag + html;
+}
+
 function sourceURL(url, pathname, origin) {
   const target = new URL(origin);
   target.pathname = pathname;
@@ -183,9 +199,16 @@ async function sendThroughWisp(request, url, pathname, referrer) {
     }
     let body = result.body;
     const type = responseHeaders.get('content-type') || '';
-    if (body && base.pathname !== '/' && pathname && target.origin === sourceOrigin && result.status === 200 && /html|javascript|css/.test(type)) {
-      body = (await result.text()).replace(/(["'\x60(])\/(?=(?:s\/|_game\/|_c\/|assets\/|(?:favicon|gn-mathtitle|refresh-icon|setting)\.png\b))/g, '$1' + base.pathname);
+    const isHtml = /html/i.test(type);
+    const needsBaseRewrite = base.pathname !== '/' && /html|javascript|css/.test(type);
+    if (body && pathname && target.origin === sourceOrigin && result.status === 200 && (isHtml || needsBaseRewrite)) {
+      let text = await result.text();
+      if (needsBaseRewrite) {
+        text = text.replace(/(["'\x60(])\/(?=(?:s\/|_game\/|_c\/|assets\/|(?:favicon|gn-mathtitle|refresh-icon|setting)\.png\b))/g, '$1' + base.pathname);
+      }
+      if (isHtml) text = injectMaskTag(text, pathname);
       responseHeaders.delete('etag');
+      body = text;
     }
     return new Response(body, { status: result.status, statusText: result.statusText, headers: responseHeaders });
   }

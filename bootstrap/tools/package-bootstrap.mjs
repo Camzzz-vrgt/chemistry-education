@@ -46,6 +46,7 @@ import {
 } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { createRequire } from "node:module";
+import { aliasFont, buildAliasTable, packTerms, seededRandom } from "./mask-lib.mjs";
 
 const ROOT = "education";
 const OUT = "door";
@@ -131,6 +132,61 @@ if (!innerEntry) {
     process.exit(1);
 }
 innerEntry.data = Buffer.from(innerSource);
+
+// ---------- keyword mask ----------
+/* Terms the DOM must never contain verbatim. The runtime masks them to PUA
+ * glyph aliases (DOM text) or invisible markers (attrs/title); the shipped
+ * "Glyphs" font draws the aliases with DM Sans outlines so nothing changes
+ * visually. Dictionary kept short: flagged categories, evasion vocabulary,
+ * and brands a classifier would flag — edu-plausible words stay readable. */
+const MASK_TERMS = [
+    "unblocked", "unblocking", "unblocker", "unblock", "unbl0cked", "unb1ocked", "unblok",
+    "games", "game", "gaming", "gameplay", "gamer",
+    "movies & tv", "movies", "movie",
+    "soundboard", "anime", "manga", "comics",
+    "proxies", "proxy", "wisp", "scramjet", "ultraviolet", "bare-mux", "baremux",
+    "epoxy", "rammerhead", "vpn", "bypass",
+    "cheat", "hacks", "hacked", "exploit",
+    "porn", "pornhub", "xvideos", "xnxx", "xxx", "nude", "nudes", "sex", "nsfw",
+    "gore", "hentai",
+    "casino", "gamble", "gambling", "slots", "slot", "roulette", "betting",
+    "blackjack", "poker",
+    "tiktok", "instagram", "reddit", "discord", "twitch", "youtube", "snapchat",
+    "onlyfans",
+    "about:blank", "about blank", "cloaked tab",
+    "gn-math", "gn math", "gnmath", "gn/place",
+];
+const maskSeed = (await import("node:crypto")).randomBytes(4).readUInt32LE();
+const maskAliases = buildAliasTable(seededRandom(maskSeed));
+const maskFontBytes = aliasFont(readFileSync(join(import.meta.dirname, "DM-Sans.ttf")), maskAliases);
+const maskFontName = `assets/glyphs-${createHash("sha256").update(maskFontBytes).digest("hex").slice(0, 8)}.ttf`;
+entries.push({ path: maskFontName, data: Buffer.from(maskFontBytes) });
+
+const maskRuntime = readFileSync(join(import.meta.dirname, "gn-mask.js"), "utf8")
+    .replaceAll("__ALIASES__", JSON.stringify(maskAliases))
+    .replaceAll("__TERMS_PACKED__", packTerms(MASK_TERMS))
+    .replaceAll("__FONT_PATH__", "../" + maskFontName);
+entries.push({ path: "_static/mask.js", data: Buffer.from(maskRuntime) });
+
+/* Shell pages: dict-masked terms + injected runtime + edu-looking metadata.
+ * mode "all" (every char masked) is reserved for the upstream catalog —
+ * game names can't be enumerated, so the whole page paints. */
+function dressShellPage(entry, mode) {
+    let html = entry.data.toString("utf8");
+    html = html
+        .replace(/<title>[^<]*<\/title>/i, "<title>Math Practice</title>")
+        .replace(/<meta charset/i,
+            `<meta name="description" content="Free math practice problems, study tools and learning resources for students."><meta charset`);
+    const tag = `<script>window.__kwMaskMode=${JSON.stringify(mode)}</script>` +
+        `<script src="_static/mask.js"></script>` +
+        `<link rel="preload" as="font" href="${maskFontName}" type="font/ttf" crossorigin>`;
+    html = /<\/head>/i.test(html) ? html.replace(/<\/head>/i, tag + "</head>") : tag + html;
+    entry.data = Buffer.from(html);
+}
+for (const name of ["index.html", "music.html"]) {
+    const entry = entries.find((e) => e.path === name);
+    if (entry) dressShellPage(entry, "dict");
+}
 
 // ---------- serialize GNPACK1 ----------
 const MAGIC = Buffer.from("GNPACK1\0");
@@ -244,43 +300,45 @@ const installerScript = `
             !!(await caches.open(cacheName).then(function (c) { return c.match(base + ".gn-ok"); }));
         if (!have) {
             setStatus("downloading\\u2026");
-            var resp = null;
-            if (M.u) {
+            var urls = M.u ? [M.u, new URL(M.p, base).href] : [new URL(M.p, base).href];
+            var packed = null, lastErr = null;
+            for (var ui = 0; ui < urls.length && packed === null; ui++) {
                 try {
-                    resp = await fetch(M.u);
-                    if (!resp.ok) { if (resp.body && resp.body.cancel) resp.body.cancel(); resp = null; }
-                } catch (e) { resp = null; }
+                    setStatus("downloading\\u2026");
+                    var resp = await fetch(urls[ui]);
+                    if (!resp.ok) throw new Error("pack fetch " + resp.status);
+                    var total = +resp.headers.get("content-length") || 0;
+                    var buf;
+                    if (resp.body && resp.body.getReader) {
+                        var reader = resp.body.getReader();
+                        var parts = [];
+                        var got = 0;
+                        for (;;) {
+                            var chunk = await reader.read();
+                            if (chunk.done) break;
+                            parts.push(chunk.value);
+                            got += chunk.value.length;
+                            setStatus(total
+                                ? "downloading " + Math.round((got / total) * 100) + "%\\u2026"
+                                : "downloading " + (got / 1048576).toFixed(1) + " MB\\u2026");
+                        }
+                        buf = new Uint8Array(got);
+                        var at = 0;
+                        for (var pi = 0; pi < parts.length; pi++) { buf.set(parts[pi], at); at += parts[pi].length; }
+                        buf = buf.buffer;
+                    } else {
+                        buf = await resp.arrayBuffer();
+                    }
+                    setStatus("verifying\\u2026");
+                    var digest = await crypto.subtle.digest("SHA-256", buf);
+                    var hex = Array.prototype.map.call(new Uint8Array(digest), function (b) {
+                        return b.toString(16).padStart(2, "0");
+                    }).join("");
+                    if (hex !== M.h) throw new Error("pack hash mismatch");
+                    packed = buf;
+                } catch (e) { lastErr = e; }
             }
-            if (!resp) resp = await fetch(new URL(M.p, base));
-            if (!resp.ok) throw new Error("pack fetch " + resp.status);
-            var total = +resp.headers.get("content-length") || 0;
-            var packed;
-            if (resp.body && resp.body.getReader) {
-                var reader = resp.body.getReader();
-                var parts = [];
-                var got = 0;
-                for (;;) {
-                    var chunk = await reader.read();
-                    if (chunk.done) break;
-                    parts.push(chunk.value);
-                    got += chunk.value.length;
-                    setStatus(total
-                        ? "downloading " + Math.round((got / total) * 100) + "%\\u2026"
-                        : "downloading " + (got / 1048576).toFixed(1) + " MB\\u2026");
-                }
-                packed = new Uint8Array(got);
-                var at = 0;
-                for (var pi = 0; pi < parts.length; pi++) { packed.set(parts[pi], at); at += parts[pi].length; }
-                packed = packed.buffer;
-            } else {
-                packed = await resp.arrayBuffer();
-            }
-            setStatus("verifying\\u2026");
-            var digest = await crypto.subtle.digest("SHA-256", packed);
-            var hex = Array.prototype.map.call(new Uint8Array(digest), function (b) {
-                return b.toString(16).padStart(2, "0");
-            }).join("");
-            if (hex !== M.h) throw new Error("pack hash mismatch");
+            if (packed === null) throw (lastErr || new Error("pack fetch failed"));
             setStatus("unpacking\\u2026");
             var raw = await new Response(
                 new Blob([packed]).stream().pipeThrough(new DecompressionStream("gzip"))
@@ -391,7 +449,21 @@ ${installerFinal}
 
 // ---------- emit ----------
 rmSync(OUT, { recursive: true, force: true });
-rmSync(PAYLOAD_DIR, { recursive: true, force: true });
+/* Keep previously published packs: doors still running an older manifest
+ * fetch that pack's URL on update-check — deleting it here and pushing
+ * would 404 them mid-rollout. Everything else in payload/ regenerates. */
+if (existsSync(PAYLOAD_DIR)) {
+    for (const name of readdirSync(PAYLOAD_DIR)) {
+        const p = join(PAYLOAD_DIR, name);
+        if (name === "assets" && statSync(p).isDirectory()) {
+            for (const f of readdirSync(p)) {
+                if (!f.endsWith(".pack")) rmSync(join(p, f), { recursive: true, force: true });
+            }
+        } else {
+            rmSync(p, { recursive: true, force: true });
+        }
+    }
+}
 mkdirSync(OUT, { recursive: true });
 mkdirSync(join(OUT, "assets"), { recursive: true });
 mkdirSync(join(PAYLOAD_DIR, "assets"), { recursive: true });
