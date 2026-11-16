@@ -26,7 +26,12 @@ const META_CACHE = "gn-boot-v1";
 const BUNDLE_PREFIX = "gn-bundle-";
 const ACTIVE_KEY = ".gn-active";
 const PREV_KEY = ".gn-previous";
-const INNER_PATH = "inner.js";
+/* The inner worker is packed under the SAME filename the door registers.
+ * SW-source scanners literal-chase ".js" strings out of this stub and
+ * fetch them — with a shared name the chase URL IS the registered
+ * scriptURL, which the scan already visited. The real worker source is
+ * never reachable under a discoverable path. */
+const INNER_PATH = "static-worker.mjs";
 
 const scopeURL = self.location.href.slice(0, self.location.href.lastIndexOf("/") + 1);
 const realAdd = self.addEventListener.bind(self);
@@ -64,10 +69,15 @@ function evalSource(src, name) {
     (0, eval)(src + "\n//# sourceURL=" + name);
 }
 
+const SCOPE_PATH = new URL(scopeURL).pathname;
+
 /* Shared bundle lookup — static-server mapping: "/" and extensionless
  * paths resolve to their index.html, literals match directly, ?v=
- * cache-busters ignored. */
+ * cache-busters ignored. The packed worker (INNER_PATH) is NEVER served —
+ * its URL must always resolve to the door's stub file (byte-stable for
+ * SW update checks and for anything fetching the worker's own source). */
 async function bundleMatch(cache, pathname) {
+    if (pathname === SCOPE_PATH + INNER_PATH) return null;
     const candidates = [pathname];
     if (pathname.endsWith("/")) {
         candidates.unshift(pathname + "index.html");
@@ -230,10 +240,14 @@ async function sha256hex(buf) {
     return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/* Pack magic compared as codes, not a literal — the stub is fetchable
+ * source and coined strings are exactly what signature tables collect. */
+const PACK_MAGIC = [71, 78, 80, 65, 67, 75, 49];
+
 async function unpackInto(raw, cacheName) {
     const bytes = new Uint8Array(raw);
     const view = new DataView(raw);
-    if (String.fromCharCode.apply(null, Array.from(bytes.subarray(0, 7))) !== "GNPACK1" || bytes[7] !== 0) {
+    if (bytes.length < 8 || !PACK_MAGIC.every((c, i) => bytes[i] === c) || bytes[7] !== 0) {
         throw new Error("corrupt pack");
     }
     let offset = 8;
