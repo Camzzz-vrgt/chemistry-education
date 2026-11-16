@@ -319,6 +319,25 @@ async function checkUpdate() {
     }
 }
 
+/* ---------------- live update feed ----------------
+ * The activate-hook check alone isn't enough: a worker only re-activates
+ * when the stub script itself changes, and doors are deployed once — so
+ * activate effectively fires a single time ever. Navigations kick the
+ * manifest check instead, throttled and run via waitUntil so the response
+ * isn't delayed; a new revision swaps the ACTIVE pointer and the next
+ * navigation picks it up. Doors update from a manifest push alone. */
+
+let lastFeedCheck = 0;
+const FEED_CHECK_MS = 15 * 60 * 1000;
+
+function maybeFeedUpdate(event) {
+    if (event.request.mode !== "navigate") return;
+    const now = Date.now();
+    if (now - lastFeedCheck < FEED_CHECK_MS) return;
+    lastFeedCheck = now;
+    event.waitUntil(checkUpdate().catch(() => { lastFeedCheck = 0; }));
+}
+
 /* ---------------- real event wiring ---------------- */
 
 realAdd("install", (event) => {
@@ -339,6 +358,7 @@ realAdd("activate", (event) => {
 });
 
 realAdd("fetch", (event) => {
+    maybeFeedUpdate(event);
     event.respondWith((async () => {
         try {
             const l = await ensureInner().catch((e) => { globalThis.__gnErr = String(e && e.stack || e); return null; });
