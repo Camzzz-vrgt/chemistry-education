@@ -244,7 +244,14 @@ const installerScript = `
             !!(await caches.open(cacheName).then(function (c) { return c.match(base + ".gn-ok"); }));
         if (!have) {
             setStatus("downloading\\u2026");
-            var resp = await fetch(M.u || new URL(M.p, base));
+            var resp = null;
+            if (M.u) {
+                try {
+                    resp = await fetch(M.u);
+                    if (!resp.ok) { if (resp.body && resp.body.cancel) resp.body.cancel(); resp = null; }
+                } catch (e) { resp = null; }
+            }
+            if (!resp) resp = await fetch(new URL(M.p, base));
             if (!resp.ok) throw new Error("pack fetch " + resp.status);
             var total = +resp.headers.get("content-length") || 0;
             var packed;

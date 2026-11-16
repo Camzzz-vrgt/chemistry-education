@@ -277,7 +277,14 @@ async function checkUpdate() {
     if (!manifest || !manifest.r || !manifest.h) return;
     const active = await pointer(ACTIVE_KEY);
     if (active === BUNDLE_PREFIX + manifest.r) return;
-    const res = await realFetch(manifest.u || new URL(manifest.p, scopeURL).href);
+    let res = null;
+    if (manifest.u) {
+        try {
+            res = await realFetch(manifest.u);
+            if (!res.ok) { res.body?.cancel(); res = null; }
+        } catch { res = null; }
+    }
+    if (!res) res = await realFetch(new URL(manifest.p, scopeURL).href);
     if (!res.ok) return;
     const packed = await res.arrayBuffer();
     if ((await sha256hex(packed)) !== manifest.h) return;
